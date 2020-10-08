@@ -1,0 +1,24 @@
+localFile:
+  sources:
+  - plugin: file
+    path: ./testfile.json
+  destinations:
+  - plugin: stdout
+  processors:
+  - stage: 1
+    steps:
+    - step: 1
+      workflow:
+        driver: json
+        method: extract
+        fieldActions:
+          - path: source
+            action: addTag(src)
+          - path: source
+            action: addVar(tmpSrc)
+          - path: source
+        driverActions:
+          addTags:
+            site: atl
+            user.email: foo@bar.com
+

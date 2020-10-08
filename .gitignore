@@ -1,0 +1,4 @@
+cmd/*.json
+cmd/et*
+tmp
+bin

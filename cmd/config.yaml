@@ -1,0 +1,60 @@
+localFile:
+  sources:
+  - plugin: file
+    path: ./testfile.json
+  destinations:
+  - plugin: stdout
+  - plugin: file
+    path: ./outfile.json
+  processors:
+  - stage: 1
+    steps:
+    - step: 2
+      workflow:
+      - driver: json
+        method: transform
+        fieldActions:
+          - path: tmp
+            action: drop()
+    #      - path: pipeline\.topic
+    #        action: changeField(topic)
+    #      - path: node
+    #        action: changeValue(genericNode)
+    - step: 1
+      workflow:
+      - driver: json
+        method: extract
+        #fieldActions:
+          #- path: .
+          #  action: addField(tmp)
+          #- path: env
+          #  action: addTag(env)
+          #- path: pipeline.source
+          #  action: addField(src)
+          #- path: pipeline.topic
+          #- path: beat
+          #  action: addVar(ugh)
+          #- path: node
+          #  action: 
+        driverActions:
+          addVars:
+            user: foobar7
+          addFields:
+            rank: 10
+            numbers: ["one", "two", "three"]
+            #beats: getVar(ugh)
+          addTags:
+            foo: bar
+        driverConditions:
+          ifVars:
+            user: matchString(foobar7)
+          ifFields:
+            rank: 10
+            numbers: ["one", "two", "three"]
+          ifTags:
+            foo: bar
+
+
+
+
+
