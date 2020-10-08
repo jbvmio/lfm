@@ -1,4 +1,5 @@
 cmd/*.json
 cmd/et*
+cmd/goBuild.sh
 tmp
 bin
