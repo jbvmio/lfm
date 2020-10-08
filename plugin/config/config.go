@@ -3,6 +3,7 @@ package config
 import (
 	"github.com/jbvmio/lfm/plugin"
 	"github.com/jbvmio/lfm/plugin/kafka"
+	"github.com/jbvmio/lfm/plugin/loki"
 	"github.com/jbvmio/lfm/plugin/osio"
 )
 
@@ -48,6 +49,8 @@ func GetOutputConfig(i plugin.TypeID) OutputConfig {
 		return &osio.StdOutputConfig{}
 	case plugin.TypeOutputFile:
 		return &osio.FileOutputConfig{}
+	case plugin.TypeOutputLoki:
+		return &loki.OutputConfig{}
 	default:
 		return nil
 	}

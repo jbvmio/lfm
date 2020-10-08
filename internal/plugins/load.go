@@ -86,6 +86,8 @@ func loadOutputPlugin(name string, details map[string]interface{}) (p plugin.Out
 		c = config.GetOutputConfig(plugin.TypeOutputFile)
 	case `stdout`:
 		c = config.GetOutputConfig(plugin.TypeOutputStd)
+	case `loki`:
+		c = config.GetOutputConfig(plugin.TypeOutputLoki)
 	default:
 		return nil, fmt.Errorf("no defined output plugin named %s available", name)
 	}

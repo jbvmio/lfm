@@ -10,7 +10,7 @@ const (
 	TypeInputKafka
 	TypeOutputFile
 	TypeOutputStd
-	TypeLokiOutput
+	TypeOutputLoki
 )
 
 var idStrings = [...]string{
