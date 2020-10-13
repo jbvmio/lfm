@@ -10,7 +10,7 @@ import (
 
 // JSON Driver Constants
 const (
-	JSONFieldsLabel = `fields`
+	FieldsLabel = `fields`
 )
 
 // Config contains configuration details when using the JSON Driver.
@@ -66,7 +66,7 @@ type jsonPayload2 struct {
 
 func jsonProcessPayload(JP Payload) {
 	T := JP.KV(driver.TagsLabel).All()
-	F := JP.KV(JSONFieldsLabel).All()
+	F := JP.KV(FieldsLabel).All()
 	switch {
 	case len(F) < 1:
 		switch len(T) {
@@ -112,9 +112,9 @@ func syncVars(P driver.Payload, vars map[string]interface{}) {
 
 func syncFields(P driver.Payload, fields map[string]interface{}) {
 	for k, v := range fields {
-		P.KV(JSONFieldsLabel).Add(k, v)
+		P.KV(FieldsLabel).Add(k, v)
 	}
-	all := P.KV(JSONFieldsLabel).All()
+	all := P.KV(FieldsLabel).All()
 	for k, v := range all {
 		fields[k] = v
 	}
@@ -129,29 +129,11 @@ func (d *Driver) Process(P driver.Payload) {
 			P.Results() <- JP
 			return
 		}
-
-		/*
-			if JP.Match() {
-				d.addVars(JP)
-				d.addFields(JP)
-				d.addTags(JP)
-				P.Results() <- JP
-				return
-			}
-		*/
 	}
-
-	if JP.Remove() {
-		P.Results() <- driver.NewResult([]byte{}, nil)
+	if JP.Remove() && len(JP.KV(driver.TagsLabel).All()) < 1 {
+		JP.Results() <- driver.NewResult([]byte{}, nil)
 		return
 	}
-
-	/*
-		if JP.NoMatch() {
-			P.Results() <- NewResult([]byte{}, nil)
-			return
-		}
-	*/
 	d.addVars(JP)
 	d.addFields(JP)
 	d.addTags(JP)
@@ -211,9 +193,9 @@ func (d *Driver) addFields(P driver.Payload) {
 		levels := parseLevels(k)
 		switch len(levels) {
 		case 1:
-			P.KV(JSONFieldsLabel).Add(k, x)
+			P.KV(FieldsLabel).Add(k, x)
 		default:
-			raw := P.KV(JSONFieldsLabel).All()
+			raw := P.KV(FieldsLabel).All()
 			target := raw
 			for _, val := range levels[:len(levels)-1] {
 				existing, there := target[val]
@@ -230,10 +212,9 @@ func (d *Driver) addFields(P driver.Payload) {
 					target[val] = make(map[string]interface{})
 					target = target[val].(map[string]interface{})
 				}
-				fmt.Printf(">> %s > TARGET: %+v\n", val, target)
 			}
 			target[levels[len(levels)-1]] = x
-			P.KV(JSONFieldsLabel).Use(raw)
+			P.KV(FieldsLabel).Use(raw)
 		}
 	}
 }

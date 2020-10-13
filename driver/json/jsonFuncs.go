@@ -67,6 +67,8 @@ var jsonMethodAllowedActions = map[string]map[string]jsonMakeActionFn{
 	`filter`: {
 		`remove`: jsonMakeRemoveFunc,
 		`keep`:   jsonMakeKeepFunc,
+		`addTag`: jsonFilterMakeAddTagFunc,
+		`addVar`: jsonMakeAddVarFunc,
 	},
 	`transform`: {
 		`drop`:        jsonMakeDropFieldFunc,
@@ -118,29 +120,7 @@ var jsonActionAllowedConditions = map[string]map[string]jsonMakeConditionalFn{
 	},
 }
 
-/*
-var jsonMethodAllowedConditions = map[string]map[string]jsonMakeConditionalFn{
-	`extract`: {
-		`containsString`: jsonMakeConditionalContainsString,
-		`matchString`:    jsonMakeConditionalMatchString,
-		`matchRegex`:     jsonMakeConditionalMatchRegex,
-	},
-	`filter`: {
-		`containsString`: jsonMakeConditionalContainsString,
-		`matchString`:    jsonMakeConditionalMatchString,
-		`matchRegex`:     jsonMakeConditionalMatchRegex,
-	},
-	`transform`: {
-		`containsString`: jsonMakeConditionalContainsString,
-		`matchString`:    jsonMakeConditionalMatchString,
-		`matchRegex`:     jsonMakeConditionalMatchRegex,
-	},
-}
-*/
-
-var jsonNoopPathActionFunc = func(P Payload) {
-
-}
+var jsonNoopPathActionFunc = func(P Payload) {}
 
 var jsonNoopConditionFunc = func(x interface{}) bool {
 	return true
@@ -162,11 +142,12 @@ func jsonMakeAddFieldFunc(name string, fn jsonMethodFn, cs ...jsonConditionalFn)
 		return func(P Payload) {
 			val := fn(P.Bytes())
 			if val == nil {
+				P.UseError(fmt.Errorf("received nil value from method"))
 				return
 			}
 			for _, c := range cs {
 				if c(val) {
-					P.KV(JSONFieldsLabel).Add(kv[0], kv[1])
+					P.KV(FieldsLabel).Add(kv[0], kv[1])
 					return
 				}
 			}
@@ -175,11 +156,12 @@ func jsonMakeAddFieldFunc(name string, fn jsonMethodFn, cs ...jsonConditionalFn)
 		return func(P Payload) {
 			val := fn(P.Bytes())
 			if val == nil {
+				P.UseError(fmt.Errorf("received nil value from method"))
 				return
 			}
 			for _, c := range cs {
 				if c(val) {
-					P.KV(JSONFieldsLabel).Add(name, val)
+					P.KV(FieldsLabel).Add(name, val)
 					return
 				}
 			}
@@ -191,6 +173,7 @@ func jsonMakeAddTagFunc(name string, fn jsonMethodFn, cs ...jsonConditionalFn) f
 	return func(P Payload) {
 		val := fn(P.Bytes())
 		if val == nil {
+			P.UseError(fmt.Errorf("received nil value from method"))
 			return
 		}
 		for _, c := range cs {
@@ -206,6 +189,7 @@ func jsonMakeAddVarFunc(name string, fn jsonMethodFn, cs ...jsonConditionalFn) f
 	return func(P Payload) {
 		val := fn(P.Bytes())
 		if val == nil {
+			P.UseError(fmt.Errorf("received nil value from method"))
 			return
 		}
 		for _, c := range cs {
@@ -259,9 +243,8 @@ func jsonMakeTransformMethodFunc(path string) jsonMethodFn {
 
 func jsonMakeDropFieldFunc(name string, fn jsonMethodFn, cs ...jsonConditionalFn) func(P Payload) {
 	return func(P Payload) {
-
 		var b []byte
-		fields := P.KV(JSONFieldsLabel).All()
+		fields := P.KV(FieldsLabel).All()
 		switch len(fields) {
 		case 0:
 			b = P.Bytes()
@@ -269,7 +252,7 @@ func jsonMakeDropFieldFunc(name string, fn jsonMethodFn, cs ...jsonConditionalFn
 			var err error
 			b, err = JS.Marshal(fields)
 			if err != nil {
-				P.UseError(fmt.Errorf("processing change field on existing data: %w", err))
+				P.UseError(fmt.Errorf("processing drop field on existing data: %w", err))
 				return
 			}
 		}
@@ -303,7 +286,7 @@ func jsonMakeDropFieldFunc(name string, fn jsonMethodFn, cs ...jsonConditionalFn
 		}
 		for _, c := range cs {
 			if c(targetVal) {
-				P.KV(JSONFieldsLabel).Use(fields)
+				P.KV(FieldsLabel).Use(fields)
 				return
 			}
 		}
@@ -313,7 +296,7 @@ func jsonMakeDropFieldFunc(name string, fn jsonMethodFn, cs ...jsonConditionalFn
 func jsonMakeChangeFieldFunc(name string, fn jsonMethodFn, cs ...jsonConditionalFn) func(P Payload) {
 	return func(P Payload) {
 		var b []byte
-		fields := P.KV(JSONFieldsLabel).All()
+		fields := P.KV(FieldsLabel).All()
 		switch len(fields) {
 		case 0:
 			b = P.Bytes()
@@ -351,7 +334,7 @@ func jsonMakeChangeFieldFunc(name string, fn jsonMethodFn, cs ...jsonConditional
 		}
 		for _, c := range cs {
 			if c(targetVal) {
-				P.KV(JSONFieldsLabel).Use(fields)
+				P.KV(FieldsLabel).Use(fields)
 				return
 			}
 		}
@@ -360,9 +343,8 @@ func jsonMakeChangeFieldFunc(name string, fn jsonMethodFn, cs ...jsonConditional
 
 func jsonMakeChangeValueFunc(name string, fn jsonMethodFn, cs ...jsonConditionalFn) func(P Payload) {
 	return func(P Payload) {
-
 		var b []byte
-		fields := P.KV(JSONFieldsLabel).All()
+		fields := P.KV(FieldsLabel).All()
 		switch len(fields) {
 		case 0:
 			b = P.Bytes()
@@ -401,7 +383,7 @@ func jsonMakeChangeValueFunc(name string, fn jsonMethodFn, cs ...jsonConditional
 		}
 		for _, c := range cs {
 			if c(targetVal) {
-				P.KV(JSONFieldsLabel).Use(fields)
+				P.KV(FieldsLabel).Use(fields)
 				return
 			}
 		}
@@ -412,6 +394,7 @@ func jsonMakeRemoveFunc(name string, fn jsonMethodFn, cs ...jsonConditionalFn) f
 	return func(P Payload) {
 		val := fn(P.Bytes())
 		if val == nil {
+			P.UseError(fmt.Errorf("received nil value from method"))
 			return
 		}
 		v := val.([]interface{})[1]
@@ -428,6 +411,7 @@ func jsonMakeKeepFunc(name string, fn jsonMethodFn, cs ...jsonConditionalFn) fun
 	return func(P Payload) {
 		val := fn(P.Bytes())
 		if val == nil {
+			P.UseError(fmt.Errorf("received nil value from method"))
 			return
 		}
 		v := val.([]interface{})[1]
@@ -437,6 +421,23 @@ func jsonMakeKeepFunc(name string, fn jsonMethodFn, cs ...jsonConditionalFn) fun
 			}
 		}
 		P.SetRemove(true)
+	}
+}
+
+func jsonFilterMakeAddTagFunc(name string, fn jsonMethodFn, cs ...jsonConditionalFn) func(P Payload) {
+	return func(P Payload) {
+		val := fn(P.Bytes())
+		if val == nil {
+			P.UseError(fmt.Errorf("received nil value from method"))
+			return
+		}
+		v := val.([]interface{})[1]
+		for _, c := range cs {
+			if c(v) {
+				P.KV(driver.TagsLabel).Add(name, v)
+				return
+			}
+		}
 	}
 }
 
@@ -477,95 +478,6 @@ func jsonMakeConditionalMatchRegex(arg string) jsonConditionalFn {
 		return false
 	}
 }
-
-/*
-func jsonMakeExistsFunc(name string, fn jsonMethodFn, cs ...jsonConditionalFn) func(P Payload) {
-	return func(P Payload) {
-		val := fn(P.Bytes())
-		if val == nil {
-			return
-		}
-		v := val.([]interface{})[1]
-		if v != nil {
-			P.SetMatch(true)
-		} else {
-			P.SetNoMatch(true)
-		}
-	}
-}
-
-
-
-func jsonMakeMatchStringFunc(name string, fn jsonMethodFn, cs ...jsonConditionalFn) func(P Payload) {
-	return func(P Payload) {
-		val := fn(P.Bytes())
-		if val == nil {
-			return
-		}
-		v := val.([]interface{})[1]
-		target, ok := v.(string)
-		switch {
-		case ok:
-			if target == name {
-				P.SetMatch(true)
-			} else {
-				P.SetNoMatch(true)
-			}
-		default:
-			P.SetNoMatch(true)
-		}
-	}
-}
-
-func jsonMakeContainsStringFunc(name string, fn jsonMethodFn, cs ...jsonConditionalFn) func(P Payload) {
-	return func(P Payload) {
-		val := fn(P.Bytes())
-		if val == nil {
-			return
-		}
-		v := val.([]interface{})[1]
-		target, ok := v.(string)
-		switch {
-		case ok:
-			if strings.Contains(target, name) {
-				P.SetMatch(true)
-			} else {
-				P.SetNoMatch(true)
-			}
-		default:
-			P.SetNoMatch(true)
-		}
-	}
-}
-
-func jsonMakeMatchRegexFunc(name string, fn jsonMethodFn, cs ...jsonConditionalFn) func(P Payload) {
-	regex, err := regexp.Compile(name)
-	if err != nil {
-		return func(P Payload) {
-			P.UseError(fmt.Errorf("invalid regex expression: %w", err))
-			P.SetNoMatch(true)
-		}
-	}
-	return func(P Payload) {
-		val := fn(P.Bytes())
-		if val == nil {
-			return
-		}
-		v := val.([]interface{})[1]
-		target, ok := v.(string)
-		switch {
-		case ok:
-			if regex.MatchString(target) {
-				P.SetMatch(true)
-			} else {
-				P.SetNoMatch(true)
-			}
-		default:
-			P.SetNoMatch(true)
-		}
-	}
-}
-*/
 
 func parseFunction(f string) (valid bool, fn, arg string) {
 	x := funcRegex.FindStringSubmatch(f)

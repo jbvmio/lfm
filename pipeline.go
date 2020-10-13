@@ -24,8 +24,7 @@ func (P *Pipelines) AddPipeline(p Pipeline) {
 func (P *Pipelines) Run() {
 	P.errs = make(chan error, len(P.pls)*1000)
 	for i := 0; i < len(P.pls); i++ {
-		P.pls[i].Errs = P.errs
-		P.pls[i].Run()
+		P.pls[i].Run(P.errs)
 	}
 }
 
@@ -54,11 +53,9 @@ type Pipeline struct {
 }
 
 // Run starts all the Pipeline components.
-func (p *Pipeline) Run() {
+func (p *Pipeline) Run(errs chan error) {
 	p.ctx, p.stop = context.WithCancel(context.Background())
-	if p.Errs == nil {
-		p.Errs = make(chan error, len(p.Inputs)*1000)
-	}
+	p.Errs = errs
 	for _, x := range p.Inputs {
 		x.Start()
 	}
@@ -98,7 +95,6 @@ ingressLoop:
 			break ingressLoop
 		case data := <-input.Source():
 			p.P.In() <- bytes.NewBuffer(data)
-			//time.Sleep(time.Millisecond * 100)
 		}
 	}
 }
@@ -111,6 +107,8 @@ egressLoop:
 			break egressLoop
 		case data := <-p.P.Out():
 			for _, out := range outputs {
+				// add a timeout here or in pipeline/stage lib:
+				// timout()
 				out.Destination() <- data.Bytes()
 			}
 		}

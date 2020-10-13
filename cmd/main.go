@@ -1,11 +1,8 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/signal"
 	"syscall"
@@ -15,7 +12,6 @@ import (
 	"github.com/jbvmio/lfm/internal/plugins"
 	"github.com/jbvmio/lfm/pipeline"
 	"github.com/spf13/pflag"
-	"github.com/tidwall/gjson"
 )
 
 func main() {
@@ -97,122 +93,4 @@ func main() {
 
 	pipelines.Stop()
 	cancel()
-}
-
-func testInput(d pipeline.Data) (bool, error) {
-	if !gjson.ValidBytes(d.Bytes()) {
-		return false, fmt.Errorf("invalid json received")
-	}
-	r := gjson.ParseBytes(d.Bytes())
-	ioutil.ReadAll(d)
-	//source := r.Get("streamSource")
-	//d = bytes.NewBufferString(source.Raw)
-	fmt.Println("NA     >>", r.Get(`blah`).Value())
-	fmt.Println("Type   >>", r.Type)
-	fmt.Println("Type2  >>", r.Type.String())
-	fmt.Println("Type3  >>", r.Get("beat").Type.String())
-	fmt.Println("Type4  >>", r.Get("beat.name").Type.String())
-	fmt.Println("Object >>", r.IsObject())
-	fmt.Println("Array  >>", r.IsArray())
-	val := r.Value()
-	fmt.Printf("Val Type >> %T\n", val)
-	fmt.Printf("%+v\n\n", val)
-	d.Write([]byte(r.Raw))
-	return true, nil
-}
-
-func testProcess1(d pipeline.Data) (bool, error) {
-	return true, nil
-}
-
-func testOutput(d pipeline.Data) (bool, error) {
-	return true, nil
-}
-
-func makeJSONExtractFunc(path string) func(pipeline.Data) (bool, error) {
-	return func(d pipeline.Data) (bool, error) {
-		r := gjson.ParseBytes(d.Bytes()).Get(path)
-		ioutil.ReadAll(d)
-		if !r.Exists() {
-			return false, fmt.Errorf("path %s not found", path)
-		}
-		val := r.Value()
-		newOne := make(map[string]interface{})
-		newOne[`ugh`] = val
-		j, err := json.Marshal(newOne)
-		if err != nil {
-			return false, err
-		}
-		d.Write(j)
-		return true, nil
-	}
-}
-
-func makeInputFunc(in <-chan []byte) func(pipeline.Data) (bool, error) {
-	return func(d pipeline.Data) (bool, error) {
-		data := <-in
-		d.Write(data)
-		return true, nil
-	}
-}
-
-func input1(d pipeline.Data) (bool, error) {
-	d.Write([]byte(`;input1`))
-	return true, nil
-}
-
-func stage1processor1(d pipeline.Data) (bool, error) {
-	d.Write([]byte(`;Stage1>Processor1`))
-	return true, nil
-}
-
-func stage1processor2(d pipeline.Data) (bool, error) {
-	ugh := d.(testData)
-	if ugh.status == `ok 4` {
-		d.Write([]byte(`;Stage1>Processor4`))
-		return false, nil
-	}
-	d.Write([]byte(`;Stage1>Processor2`))
-	return true, nil
-}
-
-func stage2processor1(d pipeline.Data) (bool, error) {
-	d.Write([]byte(`;Stage2>Processor1`))
-	return true, nil
-}
-
-func stage2processor2(d pipeline.Data) (bool, error) {
-	ugh := d.(testData)
-	if ugh.status == `ok 4` {
-		d.Write([]byte(`;Stage2>Processor4`))
-	} else {
-		d.Write([]byte(`;Stage2>Processor2`))
-	}
-	return true, nil
-}
-
-func output1(d pipeline.Data) (bool, error) {
-	d.Write([]byte(`;output1`))
-	return true, nil
-}
-
-func loadFile(path string) ([]byte, error) {
-	return ioutil.ReadFile(path)
-}
-
-type testData struct {
-	status string
-	buffer *bytes.Buffer
-}
-
-func (t testData) Bytes() []byte {
-	return t.buffer.Bytes()
-}
-
-func (t testData) Read(b []byte) (int, error) {
-	return t.buffer.Read(b)
-}
-
-func (t testData) Write(b []byte) (int, error) {
-	return t.buffer.Write(b)
 }

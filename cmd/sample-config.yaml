@@ -4,21 +4,36 @@ localFile:
     path: ./testfile.json
   destinations:
   - plugin: stdout
+  - plugin: file
+    path: ./outfile.json
   processors:
   - stage: 1
     steps:
+    - step: 2
+      workflow:
+      - driver: json
+        method: transform
+        fieldActions:
+          - path: tmp
+            action: drop()
     - step: 1
       workflow:
-        driver: json
+      - driver: json
         method: extract
-        fieldActions:
-          - path: source
-            action: addTag(src)
-          - path: source
-            action: addVar(tmpSrc)
-          - path: source
         driverActions:
+          addVars:
+            user: foobar7
+          addFields:
+            rank: 10
+            numbers: ["one", "two", "three"]
           addTags:
-            site: atl
-            user.email: foo@bar.com
+            foo: bar
+        driverConditions:
+          ifVars:
+            user: matchString(foobar7)
+          ifFields:
+            rank: 10
+            numbers: ["one", "two", "three"]
+          ifTags:
+            foo: bar
 
