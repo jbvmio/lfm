@@ -66,7 +66,8 @@ func (c *InputConfig) CreateInput() (plugin.Input, error) {
 	if c.DeleteGroup {
 		err := deleteCG(client, c.Group)
 		if err != nil {
-			return nil, fmt.Errorf("kafka could not delete group: %w", err)
+			// LOGGER:
+			fmt.Printf("kafka could not delete group: %v", err)
 		}
 	}
 	topicsList := filterUnique(c.Topics)
