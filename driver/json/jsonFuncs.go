@@ -54,7 +54,7 @@ type jsonMakeActionFn func(string, jsonMethodFn, ...jsonConditionalFn) func(P Pa
 
 var jsonMethodFunc = map[string]jsonMakeMethodFn{
 	`extract`:   jsonMakeExtractMethodFunc,
-	`filter`:    jsonMakeTransformMethodFunc,
+	`filter`:    jsonMakeFilterMethodFunc,
 	`transform`: jsonMakeTransformMethodFunc,
 }
 
@@ -65,10 +65,11 @@ var jsonMethodAllowedActions = map[string]map[string]jsonMakeActionFn{
 		`addVar`:   jsonMakeAddVarFunc,
 	},
 	`filter`: {
-		`remove`: jsonMakeRemoveFunc,
-		`keep`:   jsonMakeKeepFunc,
-		`addTag`: jsonFilterMakeAddTagFunc,
-		`addVar`: jsonMakeAddVarFunc,
+		`remove`:   jsonMakeRemoveFunc,
+		`removeIf`: jsonMakeRemoveFunc,
+		`keep`:     jsonMakeKeepFunc,
+		`keepIf`:   jsonMakeKeepIfFunc,
+		`addTag`:   jsonFilterMakeAddTagFunc,
 	},
 	`transform`: {
 		`drop`:        jsonMakeDropFieldFunc,
@@ -152,7 +153,7 @@ func jsonMakeAddFieldFunc(name string, fn jsonMethodFn, cs ...jsonConditionalFn)
 				}
 			}
 		}
-	default:
+	case 1:
 		return func(P Payload) {
 			val := fn(P.Bytes())
 			if val == nil {
@@ -166,21 +167,47 @@ func jsonMakeAddFieldFunc(name string, fn jsonMethodFn, cs ...jsonConditionalFn)
 				}
 			}
 		}
+	default:
+		return func(P Payload) {
+			P.UseError(fmt.Errorf("invalid option %q for addField", name))
+		}
 	}
 }
 
 func jsonMakeAddTagFunc(name string, fn jsonMethodFn, cs ...jsonConditionalFn) func(P Payload) {
-	return func(P Payload) {
-		val := fn(P.Bytes())
-		if val == nil {
-			P.UseError(fmt.Errorf("received nil value from method"))
-			return
-		}
-		for _, c := range cs {
-			if c(val) {
-				P.KV(driver.TagsLabel).Add(name, val)
+	kv := strings.Split(name, `,`)
+	switch len(kv) {
+	case 2:
+		return func(P Payload) {
+			val := fn(P.Bytes())
+			if val == nil {
+				P.UseError(fmt.Errorf("received nil value from method"))
 				return
 			}
+			for _, c := range cs {
+				if c(val) {
+					P.KV(driver.TagsLabel).Add(kv[0], kv[1])
+					return
+				}
+			}
+		}
+	case 1:
+		return func(P Payload) {
+			val := fn(P.Bytes())
+			if val == nil {
+				P.UseError(fmt.Errorf("received nil value from method"))
+				return
+			}
+			for _, c := range cs {
+				if c(val) {
+					P.KV(driver.TagsLabel).Add(name, val)
+					return
+				}
+			}
+		}
+	default:
+		return func(P Payload) {
+			P.UseError(fmt.Errorf("invalid option %q for addTag", name))
 		}
 	}
 }
@@ -226,9 +253,16 @@ func jsonMakeExtractMethodFunc(path string) jsonMethodFn {
 }
 
 func jsonMakeFilterMethodFunc(path string) jsonMethodFn {
-	return func(data []byte) interface{} {
-		r := gjson.ParseBytes(data).Get(path)
-		return r.Value()
+	switch path {
+	case `.`:
+		return func(data []byte) interface{} {
+			return nil
+		}
+	default:
+		return func(data []byte) interface{} {
+			r := gjson.ParseBytes(data).Get(path)
+			return r.Value()
+		}
 	}
 }
 
@@ -397,9 +431,10 @@ func jsonMakeRemoveFunc(name string, fn jsonMethodFn, cs ...jsonConditionalFn) f
 			P.UseError(fmt.Errorf("received nil value from method"))
 			return
 		}
-		v := val.([]interface{})[1]
 		for _, c := range cs {
-			if c(v) {
+			if c(val) {
+				tmp := make(map[string]interface{})
+				P.KV(driver.TagsLabel).Use(tmp)
 				P.SetRemove(true)
 				return
 			}
@@ -414,9 +449,8 @@ func jsonMakeKeepFunc(name string, fn jsonMethodFn, cs ...jsonConditionalFn) fun
 			P.UseError(fmt.Errorf("received nil value from method"))
 			return
 		}
-		v := val.([]interface{})[1]
 		for _, c := range cs {
-			if c(v) {
+			if c(val) {
 				return
 			}
 		}
@@ -424,20 +458,84 @@ func jsonMakeKeepFunc(name string, fn jsonMethodFn, cs ...jsonConditionalFn) fun
 	}
 }
 
+func jsonMakeKeepIfFunc(name string, fn jsonMethodFn, cs ...jsonConditionalFn) func(P Payload) {
+	there, Fn, arg := parseFunction(name)
+	switch {
+	case there:
+		return func(P Payload) {
+			val := P.KV(jsonDriverActionKV[Fn]).Get(arg)
+			if val == nil {
+				P.SetRemove(true)
+				return
+			}
+			for _, c := range cs {
+				if c(val) {
+					return
+				}
+			}
+			P.SetRemove(true)
+		}
+	default:
+		return func(P Payload) {
+			P.UseError(fmt.Errorf("invalid option %q for keepIf", name))
+		}
+	}
+}
+
 func jsonFilterMakeAddTagFunc(name string, fn jsonMethodFn, cs ...jsonConditionalFn) func(P Payload) {
+	kv := strings.Split(name, `,`)
+	switch len(kv) {
+	case 2:
+		return func(P Payload) {
+			val := fn(P.Bytes())
+			if val == nil {
+				P.UseError(fmt.Errorf("received nil value from method"))
+				return
+			}
+			for _, c := range cs {
+				if c(val) {
+					P.KV(driver.TagsLabel).Add(kv[0], kv[1])
+					return
+				}
+			}
+			P.SetRemove(true)
+		}
+	case 1:
+		return func(P Payload) {
+			val := fn(P.Bytes())
+			if val == nil {
+				P.UseError(fmt.Errorf("received nil value from method"))
+				return
+			}
+			for _, c := range cs {
+				if c(val) {
+					P.KV(driver.TagsLabel).Add(name, val)
+					return
+				}
+			}
+			P.SetRemove(true)
+		}
+	default:
+		return func(P Payload) {
+			P.UseError(fmt.Errorf("invalid option %q for addTag", name))
+		}
+	}
+}
+
+func jsonFilterMakeAddVarFunc(name string, fn jsonMethodFn, cs ...jsonConditionalFn) func(P Payload) {
 	return func(P Payload) {
 		val := fn(P.Bytes())
 		if val == nil {
 			P.UseError(fmt.Errorf("received nil value from method"))
 			return
 		}
-		v := val.([]interface{})[1]
 		for _, c := range cs {
-			if c(v) {
-				P.KV(driver.TagsLabel).Add(name, v)
+			if c(val) {
+				P.KV(driver.VarsLabel).Add(name, val)
 				return
 			}
 		}
+		P.SetRemove(true)
 	}
 }
 
