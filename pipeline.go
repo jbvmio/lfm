@@ -32,19 +32,19 @@ func (P *Pipelines) Run() {
 	if P.l == nil {
 		P.l = log.NewNoop()
 	}
-	P.l.Info("LFM Starting Pipeline Collection")
+	P.l.Infof("LFM Starting Pipeline Collection")
 	P.errs = make(chan error, len(P.pls)*1000)
 	for i := 0; i < len(P.pls); i++ {
-		P.l.Info("LFM Starting Pipeline ", P.pls[i].Name)
+		P.l.Infof("LFM Starting Pipeline %s", P.pls[i].Name)
 		P.pls[i].Run(P.errs)
 	}
 }
 
 // Stop stops the collection of Pipelines.
 func (P *Pipelines) Stop() {
-	P.l.Info("LFM Stopping Pipeline Collection")
+	P.l.Infof("LFM Stopping Pipeline Collection")
 	for i := 0; i < len(P.pls); i++ {
-		P.l.Info("LFM Stopping Pipeline ", P.pls[i].Name)
+		P.l.Infof("LFM Stopping Pipeline %s", P.pls[i].Name)
 		P.pls[i].Stop()
 	}
 }
@@ -72,14 +72,14 @@ func (p *Pipeline) Run(errs chan error) {
 	if p.L == nil {
 		p.L = log.NewNoop()
 	}
-	p.L.Info("LFM Pipeline Starting")
+	p.L.Infof("LFM Pipeline Starting")
 	p.ctx, p.stop = context.WithCancel(context.Background())
 	p.Errs = errs
-	p.L.Info("LFM Pipeline Starting", len(p.Inputs), "Inputs")
+	p.L.Infof("LFM Pipeline Starting %d Input(s)", len(p.Inputs))
 	for _, x := range p.Inputs {
 		x.Start()
 	}
-	p.L.Info("LFM Pipeline Starting", len(p.Outputs), "Outputs")
+	p.L.Infof("LFM Pipeline Starting %d Output(s)", len(p.Outputs))
 	for _, x := range p.Outputs {
 		x.Start()
 	}
@@ -89,53 +89,53 @@ func (p *Pipeline) Run(errs chan error) {
 	go p.startEgress(p.ctx, p.Outputs)
 	go p.startErrs(p.ctx)
 	p.P.Run()
-	p.L.Info("LFM Pipeline Started")
+	p.L.Infof("LFM Pipeline Started")
 }
 
 // Errors returns the error channel for recieving errors.
 func (p *Pipeline) Errors() <-chan error {
-	p.L.Debug("LFM Pipeline returning error channel")
+	p.L.Debugf("LFM Pipeline returning error channel")
 	return p.Errs
 }
 
 // Stop stops all the Pipeline components.
 func (p *Pipeline) Stop() {
-	p.L.Info("LFM Pipeline Received Stop Request")
+	p.L.Infof("LFM Pipeline Received Stop Request")
 	p.stop()
-	p.L.Info("LFM Pipeline Stopping ", len(p.Inputs), " Input(s)")
+	p.L.Infof("LFM Pipeline Stopping %d Input(s)", len(p.Inputs))
 	for _, x := range p.Inputs {
 		x.Stop()
 	}
-	p.L.Info("LFM Pipeline Stopping ", len(p.Outputs), " Output(s)")
+	p.L.Infof("LFM Pipeline Stopping %d Output(s)", len(p.Outputs))
 	for _, x := range p.Outputs {
 		x.Stop()
 	}
 	p.P.Stop()
-	p.L.Info("LFM Pipeline Stopped")
+	p.L.Infof("LFM Pipeline Stopped")
 }
 
 func (p *Pipeline) startIngress(ctx context.Context, input plugin.Input) {
-	p.L.Info("LFM Pipeline Running Input")
+	p.L.Infof("LFM Pipeline Running Input")
 	for data := range input.Source() {
 		select {
 		case <-ctx.Done():
-			p.L.Debug("LFM Pipeline is done, discarding data from Input")
+			p.L.Debugf("LFM Pipeline is done, discarding data from Input")
 		default:
-			p.L.Debug("LFM Pipeline Received Data from Input")
+			p.L.Debugf("LFM Pipeline Received Data from Input")
 			p.P.In() <- bytes.NewBuffer(data)
 		}
 	}
-	p.L.Info("LFM Pipeline Stopped an Input")
+	p.L.Infof("LFM Pipeline Stopped an Input")
 }
 
 func (p *Pipeline) startEgress(ctx context.Context, outputs []plugin.Output) {
-	p.L.Info("LFM Pipeline Running ", len(outputs), " Output(s)")
+	p.L.Infof("LFM Pipeline Running %d Output(s)", len(outputs))
 	for data := range p.P.Out() {
 		select {
 		case <-ctx.Done():
-			p.L.Debug("LFM Pipeline is done, skipping send to ", len(outputs), " Output(s)")
+			p.L.Debugf("LFM Pipeline is done, skip sending to %d Output(s)", len(outputs))
 		default:
-			p.L.Debug("LFM Pipeline Sending Data to ", len(outputs), " Output(s)")
+			p.L.Debugf("LFM Pipeline Sending Data to %d Output(s)", len(outputs))
 			for _, out := range outputs {
 				// add a timeout here or in pipeline/stage lib:
 				// timout()
@@ -143,19 +143,19 @@ func (p *Pipeline) startEgress(ctx context.Context, outputs []plugin.Output) {
 			}
 		}
 	}
-	p.L.Info("LFM Pipeline Stopped ", len(outputs), " Output(s)")
+	p.L.Infof("LFM Pipeline Stopped %d Output(s)", len(outputs))
 }
 
 func (p *Pipeline) startErrs(ctx context.Context) {
-	p.L.Info("LFM Pipeline Running Error Monitor")
+	p.L.Infof("LFM Pipeline Running Error Monitor")
 	for err := range p.P.Error() {
 		select {
 		case <-ctx.Done():
-			p.L.Error("LFM Pipeline is done, received but not sending error: ", err)
+			p.L.Errorf("LFM Pipeline is done, received but not sending error: %v", err)
 		default:
-			p.L.Debug("LFM Pipeline Received Error from Error Monitor, Sending", err)
+			p.L.Debugf("LFM Pipeline Received Error from Error Monitor, Sending error: %v", err)
 			p.Errs <- err
 		}
 	}
-	p.L.Info("LFM Pipeline Stopped Error Monitor")
+	p.L.Infof("LFM Pipeline Stopped Error Monitor")
 }
