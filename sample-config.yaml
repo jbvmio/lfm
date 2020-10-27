@@ -1,0 +1,25 @@
+localFile:
+  sources:
+  - plugin: file
+    path: /app/test-input.txt
+  destinations:
+  - plugin: stdout
+  processors:
+  - stage: 1
+    steps:
+    - step: 1
+      workflow:
+        driver: json
+        method: extract
+        fieldActions:
+          - path: .
+            action: addField(src)
+        driverActions:
+          addVars:
+            user: clark
+          addFields:
+            rank: 10
+            numbers: ["one", "two", "three"]
+          addTags:
+            foo: bar
+            user: getVar(user)

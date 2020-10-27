@@ -15,6 +15,10 @@ import (
 	"go.uber.org/zap"
 )
 
+var (
+	buildTime, commitHash string
+)
+
 func main() {
 	pf := pflag.NewFlagSet(`lfm`, pflag.ExitOnError)
 	cfgFile := pf.StringP("config", "c", "./config.yaml", "Path to config Yaml file.")
@@ -22,7 +26,7 @@ func main() {
 
 	L := lfm.ConfigureLogger(`info`, os.Stdout)
 	defer L.Sync()
-	L.Info("Starting LFM ...")
+	L.Info("Starting LFM ...", zap.String(`version`, buildTime), zap.String(`commit`, commitHash))
 
 	cfg, err := lfm.ConfigFromFile(*cfgFile)
 	if err != nil {
