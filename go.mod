@@ -12,5 +12,6 @@ require (
 	github.com/prometheus/common v0.11.1
 	github.com/spf13/pflag v1.0.5
 	github.com/tidwall/gjson v1.6.1
+	go.uber.org/zap v1.16.0
 	gopkg.in/yaml.v2 v2.3.0
 )
