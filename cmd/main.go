@@ -26,39 +26,35 @@ func main() {
 
 	cfg, err := lfm.ConfigFromFile(*cfgFile)
 	if err != nil {
-		fmt.Println("ERR:", err)
-		os.Exit(1)
+		L.Fatal("error parsing config", zap.Error(err))
 	}
 	inputs, err := plugins.LoadInputs(cfg)
 	if err != nil {
-		fmt.Println("ERR:", err)
-		os.Exit(1)
+		L.Fatal("error loading inputs", zap.Error(err))
 	}
 	outputs, err := plugins.LoadOutputs(cfg)
 	if err != nil {
-		fmt.Println("ERR:", err)
-		os.Exit(1)
+		L.Fatal("error loading outputs", zap.Error(err))
 	}
 	processors, err := drivers.LoadProcessors(cfg)
 	if err != nil {
-		fmt.Println("ERR:", err)
-		os.Exit(1)
+		L.Fatal("error loading processors", zap.Error(err))
 	}
 
 	// DEBUG:
 	for k := range processors {
-		fmt.Println(k)
+		//fmt.Println(k)
 		for a, x := range processors[k] {
-			fmt.Println("STAGE:", a)
+			//fmt.Println("STAGE:", a)
 			for b, y := range x {
-				fmt.Println(" STEP:", b)
-				for c, z := range y {
-					fmt.Println("  DRIVER:", c, ">", z)
+				//fmt.Println(" STEP:", b)
+				for c := range y {
+					//fmt.Println("  DRIVER:", c, ">", z)
+					L.Info("discovered drivers", zap.String("PIPELINE", k), zap.Int("STAGE", a), zap.Int("STEP", b), zap.Int("DRIVER", c))
 				}
 			}
 		}
 	}
-	var loggers []*zap.SugaredLogger
 	ctx, cancel := context.WithCancel(context.Background())
 	var pipelines lfm.Pipelines
 	pipelines.UseLogger(L.Sugar())
@@ -68,13 +64,11 @@ func main() {
 			panic(`no output for ` + name)
 		}
 		S := L.With(zap.String(`pipeline`, name)).Sugar()
-		loggers = append(loggers, S)
 		stages := processors[name]
 		p := pipeline.NewPipeline(ctx, S)
 		for n, steps := range stages {
 			//sl := l.With(zap.Int(`stage`, n))
 			SL := S.With(zap.Int(`stage`, n))
-			loggers = append(loggers, SL)
 			s := pipeline.NewStage(ctx, SL)
 			//s.InputFn = drivers.MakeDriversInitFunc(steps)
 			s.Processors = []pipeline.DataFunc{drivers.MakeDriversFunc(steps)}
@@ -110,10 +104,6 @@ func main() {
 	pipelines.Stop()
 	cancel()
 
-	for n, logger := range loggers {
-		L.Info("Syncing Logger", zap.Int(`logger`, n))
-		logger.Sync()
-	}
 	L.Info("Finished Syncing Loggers")
 	L.Info("Stopped.")
 }

@@ -35,7 +35,7 @@ func (P *Pipelines) Run() {
 	P.l.Info("LFM Starting Pipeline Collection")
 	P.errs = make(chan error, len(P.pls)*1000)
 	for i := 0; i < len(P.pls); i++ {
-		P.l.Info("LFM Starting Pipeline", P.pls[i].Name)
+		P.l.Info("LFM Starting Pipeline ", P.pls[i].Name)
 		P.pls[i].Run(P.errs)
 	}
 }
@@ -44,7 +44,7 @@ func (P *Pipelines) Run() {
 func (P *Pipelines) Stop() {
 	P.l.Info("LFM Stopping Pipeline Collection")
 	for i := 0; i < len(P.pls); i++ {
-		P.l.Info("LFM Stopping Pipeline", P.pls[i].Name)
+		P.l.Info("LFM Stopping Pipeline ", P.pls[i].Name)
 		P.pls[i].Stop()
 	}
 }
@@ -102,11 +102,11 @@ func (p *Pipeline) Errors() <-chan error {
 func (p *Pipeline) Stop() {
 	p.L.Info("LFM Pipeline Received Stop Request")
 	p.stop()
-	p.L.Info("LFM Pipeline Stopping", len(p.Inputs), " Inputs")
+	p.L.Info("LFM Pipeline Stopping ", len(p.Inputs), " Input(s)")
 	for _, x := range p.Inputs {
 		x.Stop()
 	}
-	p.L.Info("LFM Pipeline Stopping ", len(p.Outputs), " Outputs")
+	p.L.Info("LFM Pipeline Stopping ", len(p.Outputs), " Output(s)")
 	for _, x := range p.Outputs {
 		x.Stop()
 	}
