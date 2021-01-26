@@ -9,8 +9,9 @@ const (
 	TypeInputFile
 	TypeInputKafka
 	TypeOutputFile
-	TypeOutputStd
+	TypeOutputKafka
 	TypeOutputLoki
+	TypeOutputStd
 )
 
 var idStrings = [...]string{
@@ -18,8 +19,9 @@ var idStrings = [...]string{
 	`FileInput`,
 	`KafkaInput`,
 	`FileOutput`,
-	`StdOutput`,
+	`KafkaOutput`,
 	`LokiOutput`,
+	`StdOutput`,
 }
 
 func (id TypeID) String() string {

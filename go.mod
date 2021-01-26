@@ -14,4 +14,5 @@ require (
 	github.com/tidwall/gjson v1.6.1
 	go.uber.org/zap v1.16.0
 	gopkg.in/yaml.v2 v2.3.0
+	gopkg.in/yaml.v3 v3.0.0-20200615113413-eeeca48fe776
 )

@@ -45,12 +45,14 @@ func GetOutputConfig(i plugin.TypeID) OutputConfig {
 	switch i {
 	case plugin.TypeNone:
 		return nil
-	case plugin.TypeOutputStd:
-		return &osio.StdOutputConfig{}
 	case plugin.TypeOutputFile:
 		return &osio.FileOutputConfig{}
+	case plugin.TypeOutputKafka:
+		return &kafka.OutputConfig{}
 	case plugin.TypeOutputLoki:
 		return &loki.OutputConfig{}
+	case plugin.TypeOutputStd:
+		return &osio.StdOutputConfig{}
 	default:
 		return nil
 	}

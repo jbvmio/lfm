@@ -11,7 +11,7 @@ import (
 // LoadInputs loads Input Plugins.
 func LoadInputs(cfg lfm.Configs) (inputs map[string][]plugin.Input, err error) {
 	inputs = make(map[string][]plugin.Input)
-	if len(cfg) > 1 {
+	if len(cfg) < 1 {
 		return nil, fmt.Errorf("invalid config")
 	}
 	for k, v := range cfg {
@@ -35,7 +35,7 @@ func LoadInputs(cfg lfm.Configs) (inputs map[string][]plugin.Input, err error) {
 // LoadOutputs loads Output Plugins.
 func LoadOutputs(cfg lfm.Configs) (outputs map[string][]plugin.Output, err error) {
 	outputs = make(map[string][]plugin.Output)
-	if len(cfg) > 1 {
+	if len(cfg) < 1 {
 		return nil, fmt.Errorf("invalid config")
 	}
 	for k, v := range cfg {
@@ -88,6 +88,8 @@ func loadOutputPlugin(name string, details map[string]interface{}) (p plugin.Out
 		c = config.GetOutputConfig(plugin.TypeOutputStd)
 	case `loki`:
 		c = config.GetOutputConfig(plugin.TypeOutputLoki)
+	case `kafka`:
+		c = config.GetOutputConfig(plugin.TypeOutputKafka)
 	default:
 		return nil, fmt.Errorf("no defined output plugin named %s available", name)
 	}

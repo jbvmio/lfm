@@ -22,8 +22,9 @@ type Config struct {
 
 // Stage holds the stage order and Step definitions.
 type Stage struct {
-	Stage int    `yaml:"stage"`
-	Steps []Step `yaml:"steps"`
+	Stage     int    `yaml:"stage"`
+	StageFile string `yaml:"stageFile"`
+	Steps     []Step `yaml:"steps"`
 }
 
 // Step holds the processing instructions.
@@ -40,7 +41,27 @@ func ConfigFromFile(path string) (cfgs Configs, err error) {
 		return Configs{}, err
 	}
 	err = yaml.Unmarshal(b, &cfgs)
+	for k, v := range cfgs {
+		for i := 0; i < len(v.Processors); i++ {
+			err = v.Processors[i].stepsFromFile()
+			if err != nil {
+				err = fmt.Errorf("invalid stagefile for pipeline %s stage %d: %w", k, v.Processors[i].Stage, err)
+				return
+			}
+		}
+	}
 	return
+}
+
+func (s *Stage) stepsFromFile() error {
+	if s.StageFile == "" {
+		return nil
+	}
+	b, err := ioutil.ReadFile(s.StageFile)
+	if err != nil {
+		return err
+	}
+	return yaml.Unmarshal(b, &s.Steps)
 }
 
 func loadFile(path string) ([]byte, error) {

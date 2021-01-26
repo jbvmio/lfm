@@ -1,190 +1,159 @@
 package kafka
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
-	"os"
-	"strings"
+	"regexp"
 	"sync"
 
 	kctl "github.com/jbvmio/kafka"
-	"github.com/jbvmio/lfm/plugin"
-	"gopkg.in/yaml.v2"
 )
 
-// InputConfig contains configuration details when using the Input Plugin.
-type InputConfig struct {
-	Brokers     []string `yaml:"brokers" json:"brokers"`
-	Topics      []string `yaml:"topics" json:"topics"`
-	Group       string   `yaml:"group" json:"group"`
-	DeleteGroup bool     `yaml:"deleteGroup" json:"deleteGroup"`
-	StartOldest bool     `yaml:"startOldest" json:"startOldest"`
-	Threads     int      `yaml:"threads" json:"threads"`
+var useKafkaVersion = kctl.VER210KafkaVersion
+
+type kafkaProducer struct {
+	producer *kctl.Producer
+	topic    string
+	dataChan chan []byte
+	stopChan chan struct{}
+	errs     chan error
 }
 
-// Configure attempts to configure the Config based on the details entered.
-func (c *InputConfig) Configure(details map[string]interface{}) error {
-	y, err := yaml.Marshal(details)
-	if err != nil {
-		return err
+func newKafkaProducer(producer *kctl.Producer, topic string, stopChan chan struct{}, errs chan error) kafkaProducer {
+	return kafkaProducer{
+		producer: producer,
+		topic:    topic,
+		dataChan: make(chan []byte, defaultBuffer),
+		stopChan: stopChan,
+		errs:     errs,
 	}
-	err = yaml.Unmarshal(y, c)
-	if err != nil {
-		return err
-	}
-	if len(c.Brokers) < 1 {
-		return fmt.Errorf("missing or invalid brokers defined for kctl input")
-	}
-	if len(c.Topics) < 1 {
-		return fmt.Errorf("missing or invalid topics defined for kctl input")
-	}
-	if c.Group == "" {
-		return fmt.Errorf("missing or invalid group defined for kctl input")
-	}
-	if c.Threads == 0 {
-		c.Threads = 1
-	}
-	return nil
 }
 
-// CreateInput creates an Input based on the Config.
-func (c *InputConfig) CreateInput() (plugin.Input, error) {
-	hn, err := os.Hostname()
-	if err != nil {
-		hn = "undiscovered-host"
-	}
-	conf := kctl.GetConf(hn + `-` + makeHex(6))
-	conf.Version = kctl.VER210KafkaVersion
-	if c.StartOldest {
-		conf.Consumer.Offsets.Initial = -2
-	}
-	client, err := kctl.NewCustomClient(conf, c.Brokers...)
-	if err != nil {
-		return nil, fmt.Errorf("kafka could not create client: %w", err)
-	}
-	if c.DeleteGroup {
-		err := deleteCG(client, c.Group)
-		if err != nil {
-			// LOGGER:
-			fmt.Printf("kafka could not delete group: %v", err)
-		}
-	}
-	topicsList := filterUnique(c.Topics)
-	if ok := topicsExist(client, topicsList...); !ok {
-		return nil, fmt.Errorf("kafka could not validate topics")
-	}
-	stopped := new(bool)
-	dataChan := make(chan []byte, 1000)
-	processor := newKafkaProcessor(dataChan, stopped)
-	consumers := make([]*kctl.ConsumerGroup, c.Threads)
-	for i := 0; i < c.Threads; i++ {
-		cfg := kctl.GetConf(hn + `-` + makeHex(6))
-		consumer, err := kctl.NewConsumerGroup(c.Brokers, c.Group, cfg, topicsList...)
-		if err != nil {
-			return nil, fmt.Errorf("kafka could not create consumer: %w", err)
-		}
-		consumer.GETALL(processor.processMSG)
-		consumers[i] = consumer
-	}
-	return &Input{
-		client:        client,
-		consumers:     consumers,
-		group:         c.Group,
-		deleteGroup:   c.DeleteGroup,
-		data:          dataChan,
-		errs:          make(chan error, 1000),
-		stopChan:      make(chan struct{}),
-		cgStoppedChan: make(chan int, c.Threads),
-		stopped:       stopped,
-		wg:            sync.WaitGroup{},
-	}, nil
-}
-
-// Input works with data contained in Kafka Topics as Input.
-type Input struct {
-	client        *kctl.KClient
-	consumers     []*kctl.ConsumerGroup
-	group         string
-	deleteGroup   bool
-	data          chan []byte
-	errs          chan error
-	stopChan      chan struct{}
-	cgStoppedChan chan int
-	stopped       *bool
-	wg            sync.WaitGroup
-}
-
-// Start starts the plugin.
-// TODO: Create a "watcher" to restart CG as needed ...
-func (in *Input) Start() error {
-	for i := 0; i < len(in.consumers); i++ {
-		go func(id int, stoppedChan chan int, consumer *kctl.ConsumerGroup) {
-			err := consumer.Consume()
-			if err != nil {
-				in.errs <- err
+func (p *kafkaProducer) produce(wg *sync.WaitGroup) {
+	go func() {
+		defer wg.Done()
+	produceLoop:
+		for {
+			select {
+			case <-p.stopChan:
+				break produceLoop
+			case e := <-p.producer.Errors():
+				p.errs <- fmt.Errorf("producer for topic %s error: %w", p.topic, e.Err)
+			case <-p.producer.Successes():
+				// optionally add debug messages here.
 			}
-			stoppedChan <- id
-		}(i, in.cgStoppedChan, in.consumers[i])
+		}
+		fmt.Printf("producer for topic %s stopped.\n", p.topic)
+	}()
+}
+
+func (p *kafkaProducer) send(b []byte) {
+	go func() {
+		// incorporate timeout here if needed.
+		p.producer.Input() <- &kctl.Message{
+			Topic: p.topic,
+			Value: b,
+		}
+	}()
+}
+
+type kafkaProcessor struct {
+	dataChan chan []byte
+	stopped  *bool
+}
+
+func newKafkaProcessor(dataChan chan []byte, stopped *bool) *kafkaProcessor {
+	return &kafkaProcessor{
+		dataChan: dataChan,
+		stopped:  stopped,
+	}
+}
+
+// ProcessMSG processes a Kafka msg.
+func (p *kafkaProcessor) processMSG(msg *kctl.Message) (bool, error) {
+	switch {
+	case *p.stopped:
+		fmt.Println("IS STOPPED")
+		return false, nil
+	default:
+		p.dataChan <- msg.Value
+		return true, nil
+	}
+}
+
+// DeleteCG deletes a consumer group.
+func deleteCG(client *kctl.KClient, group string) error {
+	var found bool
+	groups, errs := client.ListGroups()
+	if len(errs) > 1 {
+		for _, e := range errs {
+			fmt.Println(e)
+		}
+		return fmt.Errorf("error fetching existing group metadata: %s", errs[0])
+	}
+	for _, g := range groups {
+		if g == group {
+			found = true
+			break
+		}
+	}
+	if found {
+		err := client.RemoveGroup(group)
+		if err != nil {
+			return fmt.Errorf("error deleting existing group: %w", err)
+		}
 	}
 	return nil
 }
 
-// Stop stops the plugin.
-func (in *Input) Stop() error {
-	*in.stopped = true
-	var err error
-	var errMsg string
-	for i := 0; i < len(in.consumers); i++ {
-		errd := in.consumers[i].Close()
-		if errd != nil {
-			errMsg += errd.Error() + `: `
+// topicsExist returns true if the given topic exists, otherwise false.
+func topicsExist(client *kctl.KClient, topics ...string) bool {
+	var matched int
+	regex := makeRegex(topics...)
+	tMeta, err := client.GetTopicMeta()
+	if err != nil {
+		return false
+	}
+	dupe := make(map[string]bool)
+	for _, t := range tMeta {
+		if !dupe[t.Topic] {
+			dupe[t.Topic] = true
+			if regex.MatchString(t.Topic) {
+				matched++
+			}
+			if matched == len(topics) {
+				return true
+			}
 		}
 	}
-	if in.deleteGroup {
-		if errd := deleteCG(in.client, in.group); errd != nil {
-			errMsg += errd.Error() + `: `
+	return false
+}
+
+func makeRegex(terms ...string) *regexp.Regexp {
+	var regStr string
+	switch len(terms) {
+	case 0:
+		regStr = ""
+	case 1:
+		regStr = `^(` + terms[0] + `)$`
+	default:
+		regStr = `^(` + terms[0]
+		for _, t := range terms[1:] {
+			regStr += `|` + t
+		}
+		regStr += `)$`
+	}
+	return regexp.MustCompile(regStr)
+}
+
+// FilterUnique takes an array of strings and returns an array with unique entries.
+func filterUnique(vals []string) []string {
+	var tmp []string
+	dupe := make(map[string]bool)
+	for _, v := range vals {
+		if !dupe[v] {
+			dupe[v] = true
+			tmp = append(tmp, v)
 		}
 	}
-	if errd := in.client.Close(); errd != nil {
-		errMsg += errd.Error() + `: `
-	}
-	if errMsg != "" {
-		errMsg = strings.TrimSuffix(errMsg, `: `)
-		err = fmt.Errorf(errMsg)
-	}
-	return err
-}
-
-// Source returns the oncoming data channel for the Input Plugin.
-func (in *Input) Source() <-chan []byte {
-	return in.data
-}
-
-// Errors returns the error channel for the Input Plugin.
-func (in *Input) Errors() <-chan error {
-	return in.errs
-}
-
-// OutputConfig contains configuration details when using the KafkaOutput Plugin.
-type OutputConfig struct {
-	Brokers []string `yaml:"brokers" json:"brokers"`
-	Topics  []string `yaml:"topic" json:"topic"`
-}
-
-// MakeHex returns a random Hex string based on n length.
-func makeHex(n int) string {
-	b := randomBytes(n)
-	hexstring := hex.EncodeToString(b)
-	return hexstring
-}
-
-func randomBytes(n int) []byte {
-	return makeByte(n)
-}
-
-func makeByte(n int) []byte {
-	b := make([]byte, n)
-	rand.Read(b)
-	return b
+	return tmp
 }
