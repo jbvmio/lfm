@@ -75,6 +75,8 @@ var jsonMethodAllowedActions = map[string]map[string]jsonMakeActionFn{
 		`drop`:        jsonMakeDropFieldFunc,
 		`changeField`: jsonMakeChangeFieldFunc,
 		`changeValue`: jsonMakeChangeValueFunc,
+		`changeJSON`:  jsonMakeChangeJSONFunc,
+		`addTag`:      jsonMakeTransformAddTagFunc,
 	},
 }
 
@@ -115,6 +117,11 @@ var jsonActionAllowedConditions = map[string]map[string]jsonMakeConditionalFn{
 		`matchRegex`:     jsonMakeConditionalMatchRegex,
 	},
 	`changeValue`: {
+		`containsString`: jsonMakeConditionalContainsString,
+		`matchString`:    jsonMakeConditionalMatchString,
+		`matchRegex`:     jsonMakeConditionalMatchRegex,
+	},
+	`changeJSON`: {
 		`containsString`: jsonMakeConditionalContainsString,
 		`matchString`:    jsonMakeConditionalMatchString,
 		`matchRegex`:     jsonMakeConditionalMatchRegex,
@@ -208,6 +215,53 @@ func jsonMakeAddTagFunc(name string, fn jsonMethodFn, cs ...jsonConditionalFn) f
 	default:
 		return func(P Payload) {
 			P.UseError(fmt.Errorf("invalid option %q for addTag", name))
+		}
+	}
+}
+
+// WIP .
+func jsonMakeTransformAddTagFunc(name string, fn jsonMethodFn, cs ...jsonConditionalFn) func(P Payload) {
+	return func(P Payload) {
+		var b []byte
+		fields := P.KV(FieldsLabel).All()
+		switch len(fields) {
+		case 0:
+			b = P.Bytes()
+		default:
+			var err error
+			b, err = JS.Marshal(fields)
+			if err != nil {
+				P.UseError(fmt.Errorf("adding tag during transform operation: %w", err))
+				return
+			}
+		}
+		val := fn(b)
+		if val == nil {
+			P.UseError(fmt.Errorf("received nil value from method"))
+			return
+		}
+		v := val.([]interface{})[0]
+		target := val.([]interface{})[1]
+		var targetVal interface{}
+		switch obj := v.(type) {
+		case map[string]interface{}:
+			obj = fields
+			levels := parseLevels(name)
+			for _, val := range levels[:len(levels)-1] {
+				obj = obj[val].(map[string]interface{})
+			}
+			for _, v := range obj {
+				if v == target {
+					targetVal = v
+					break
+				}
+			}
+		}
+		for _, c := range cs {
+			if c(targetVal) {
+				P.KV(driver.TagsLabel).Add(name, targetVal)
+				return
+			}
 		}
 	}
 }
@@ -418,6 +472,67 @@ func jsonMakeChangeValueFunc(name string, fn jsonMethodFn, cs ...jsonConditional
 		for _, c := range cs {
 			if c(targetVal) {
 				P.KV(FieldsLabel).Use(fields)
+				return
+			}
+		}
+	}
+}
+
+func jsonMakeChangeJSONFunc(name string, fn jsonMethodFn, cs ...jsonConditionalFn) func(P Payload) {
+	return func(P Payload) {
+		var b []byte
+		fields := P.KV(FieldsLabel).All()
+		switch len(fields) {
+		case 0:
+			b = P.Bytes()
+		default:
+			var err error
+			b, err = JS.Marshal(fields)
+			if err != nil {
+				P.UseError(fmt.Errorf("processing change JSON on existing data: %w", err))
+				return
+			}
+		}
+		val := fn(b)
+		if val == nil {
+			P.UseError(fmt.Errorf("received nil value from method"))
+			return
+		}
+		v := val.([]interface{})[0]
+		target := val.([]interface{})[1]
+		var targetVal interface{}
+		switch obj := v.(type) {
+		case map[string]interface{}:
+			obj = fields
+			levels := parseLevels(name)
+			for _, val := range levels[:len(levels)-1] {
+				obj = obj[val].(map[string]interface{})
+			}
+			for _, v := range obj {
+				if v == target {
+					targetVal = v
+					break
+				}
+			}
+		}
+		var newFields map[string]interface{}
+		switch obj := targetVal.(type) {
+		case map[string]interface{}:
+			newFields = obj
+		case string:
+			r := gjson.Parse(obj)
+			if !r.IsObject() {
+				P.UseError(fmt.Errorf("received invalid JSON for ChangeJSON: %q", obj))
+				return
+			}
+			newFields = r.Value().(map[string]interface{})
+		default:
+			P.UseError(fmt.Errorf("received invalid type for ChangeJSON: %T", obj))
+			return
+		}
+		for _, c := range cs {
+			if c(targetVal) {
+				P.KV(FieldsLabel).Use(newFields)
 				return
 			}
 		}

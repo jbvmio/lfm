@@ -276,7 +276,7 @@ func NewDriver(cfg *Config) (*Driver, error) {
 				}
 				if name == "" {
 					switch action {
-					case `drop`, `exists`, `keep`, `remove`:
+					case `drop`, `exists`, `keep`, `remove`, `changeJSON`:
 						name = f.Path
 					default:
 						return &Driver{}, fmt.Errorf("missing action value for path %s: %s", f.Path, f.Action)
