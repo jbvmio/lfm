@@ -150,7 +150,7 @@ func jsonMakeAddFieldFunc(name string, fn jsonMethodFn, cs ...jsonConditionalFn)
 		return func(P Payload) {
 			val := fn(P.Bytes())
 			if val == nil {
-				P.UseError(fmt.Errorf("received nil value from method"))
+				P.UseError(fmt.Errorf("jsonAddField: received nil value from method"))
 				return
 			}
 			for _, c := range cs {
@@ -164,7 +164,7 @@ func jsonMakeAddFieldFunc(name string, fn jsonMethodFn, cs ...jsonConditionalFn)
 		return func(P Payload) {
 			val := fn(P.Bytes())
 			if val == nil {
-				P.UseError(fmt.Errorf("received nil value from method"))
+				P.UseError(fmt.Errorf("jsonAddField: received nil value from method"))
 				return
 			}
 			for _, c := range cs {
@@ -188,7 +188,7 @@ func jsonMakeAddTagFunc(name string, fn jsonMethodFn, cs ...jsonConditionalFn) f
 		return func(P Payload) {
 			val := fn(P.Bytes())
 			if val == nil {
-				P.UseError(fmt.Errorf("received nil value from method"))
+				P.UseError(fmt.Errorf("jsonAddTag: received nil value from method, KV: %v, PAYLOAD: %s", kv, P.Bytes()))
 				return
 			}
 			for _, c := range cs {
@@ -202,7 +202,7 @@ func jsonMakeAddTagFunc(name string, fn jsonMethodFn, cs ...jsonConditionalFn) f
 		return func(P Payload) {
 			val := fn(P.Bytes())
 			if val == nil {
-				P.UseError(fmt.Errorf("received nil value from method"))
+				P.UseError(fmt.Errorf("jsonAddTag: received nil value from method, KV: %v, PAYLOAD: %s", kv, P.Bytes()))
 				return
 			}
 			for _, c := range cs {
@@ -237,7 +237,7 @@ func jsonMakeTransformAddTagFunc(name string, fn jsonMethodFn, cs ...jsonConditi
 		}
 		val := fn(b)
 		if val == nil {
-			P.UseError(fmt.Errorf("received nil value from method"))
+			P.UseError(fmt.Errorf("jsonTransformAddTag: received nil value from method"))
 			return
 		}
 		v := val.([]interface{})[0]
@@ -270,7 +270,7 @@ func jsonMakeAddVarFunc(name string, fn jsonMethodFn, cs ...jsonConditionalFn) f
 	return func(P Payload) {
 		val := fn(P.Bytes())
 		if val == nil {
-			P.UseError(fmt.Errorf("received nil value from method"))
+			P.UseError(fmt.Errorf("jsonAddVar: received nil value from method"))
 			return
 		}
 		for _, c := range cs {
@@ -346,7 +346,7 @@ func jsonMakeDropFieldFunc(name string, fn jsonMethodFn, cs ...jsonConditionalFn
 		}
 		val := fn(b)
 		if val == nil {
-			P.UseError(fmt.Errorf("received nil value from method"))
+			P.UseError(fmt.Errorf("jsonDropField: received nil value from method"))
 			return
 		}
 		v := val.([]interface{})[0]
@@ -398,7 +398,7 @@ func jsonMakeChangeFieldFunc(name string, fn jsonMethodFn, cs ...jsonConditional
 		}
 		val := fn(b)
 		if val == nil {
-			P.UseError(fmt.Errorf("received nil value from method"))
+			P.UseError(fmt.Errorf("jsonChangeField: received nil value from method"))
 			return
 		}
 		v := val.([]interface{})[0]
@@ -446,7 +446,7 @@ func jsonMakeChangeValueFunc(name string, fn jsonMethodFn, cs ...jsonConditional
 		}
 		val := fn(b)
 		if val == nil {
-			P.UseError(fmt.Errorf("received nil value from method"))
+			P.UseError(fmt.Errorf("jsonChangeValue: received nil value from method"))
 			return
 		}
 		v := val.([]interface{})[0]
@@ -495,7 +495,7 @@ func jsonMakeChangeJSONFunc(name string, fn jsonMethodFn, cs ...jsonConditionalF
 		}
 		val := fn(b)
 		if val == nil {
-			P.UseError(fmt.Errorf("received nil value from method"))
+			P.UseError(fmt.Errorf("jsonChangeJSON: received nil value from method"))
 			return
 		}
 		v := val.([]interface{})[0]
@@ -543,7 +543,7 @@ func jsonMakeRemoveFunc(name string, fn jsonMethodFn, cs ...jsonConditionalFn) f
 	return func(P Payload) {
 		val := fn(P.Bytes())
 		if val == nil {
-			P.UseError(fmt.Errorf("received nil value from method"))
+			P.UseError(fmt.Errorf("jsonRemove: received nil value from method"))
 			return
 		}
 		for _, c := range cs {
@@ -561,7 +561,7 @@ func jsonMakeKeepFunc(name string, fn jsonMethodFn, cs ...jsonConditionalFn) fun
 	return func(P Payload) {
 		val := fn(P.Bytes())
 		if val == nil {
-			P.UseError(fmt.Errorf("received nil value from method"))
+			P.UseError(fmt.Errorf("jsonKeep: received nil value from method, PAYLOAD: %s", P.Bytes()))
 			return
 		}
 		for _, c := range cs {
@@ -604,7 +604,7 @@ func jsonFilterMakeAddTagFunc(name string, fn jsonMethodFn, cs ...jsonConditiona
 		return func(P Payload) {
 			val := fn(P.Bytes())
 			if val == nil {
-				P.UseError(fmt.Errorf("received nil value from method"))
+				P.UseError(fmt.Errorf("jsonFilterAddTag: received nil value from method"))
 				return
 			}
 			for _, c := range cs {
@@ -619,7 +619,7 @@ func jsonFilterMakeAddTagFunc(name string, fn jsonMethodFn, cs ...jsonConditiona
 		return func(P Payload) {
 			val := fn(P.Bytes())
 			if val == nil {
-				P.UseError(fmt.Errorf("received nil value from method"))
+				P.UseError(fmt.Errorf("jsonFilterAddTag: received nil value from method"))
 				return
 			}
 			for _, c := range cs {
@@ -641,7 +641,7 @@ func jsonFilterMakeAddVarFunc(name string, fn jsonMethodFn, cs ...jsonConditiona
 	return func(P Payload) {
 		val := fn(P.Bytes())
 		if val == nil {
-			P.UseError(fmt.Errorf("received nil value from method"))
+			P.UseError(fmt.Errorf("jsonFilterAddVar: received nil value from method"))
 			return
 		}
 		for _, c := range cs {
